@@ -438,6 +438,8 @@ def siguiente_ronda():
 # ============================================================
 # INICIO
 # ============================================================
+st.title("")
+
 st.image("UNRC.png", caption="Universidad Nacional Rosario Castellanos", width=300)
 
 st.title("FINANCIAL TRADER")
