@@ -7,18 +7,13 @@ Original file is located at
     https://colab.research.google.com/drive/1gW7T9Pg1FVR5JFlkZjemyItKPEl4PB7i
 """
 
-# ============================================================
-# FINANCIAL TRADER
-# Streamlit + Pygame + yfinance
-# ============================================================
-
 import streamlit as st
 import yfinance as yf
-import pygame
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import math
 import random
-import time
 
 # ============================================================
 # CONFIGURACIÓN
@@ -27,23 +22,48 @@ import time
 st.set_page_config(
     page_title="Financial Trader",
     page_icon="📈",
-    layout="centered"
+    layout="wide"
 )
 
 # ============================================================
-# INICIALIZAR PYGAME
+# ESTILO
 # ============================================================
-# Pygame se utiliza para la lógica gráfica del videojuego.
-# No se abre una ventana de Pygame en el celular.
-# Streamlit muestra la interfaz en el navegador.
 
-pygame.init()
+st.markdown("""
+<style>
 
-ANCHO = 800
-ALTO = 600
+.main {
+    background-color: #0e1117;
+}
 
-# Superficie virtual de Pygame
-SUPERFICIE = pygame.Surface((ANCHO, ALTO))
+.block-container {
+    padding-top: 1rem;
+}
+
+.metric-card {
+    background-color: #161b22;
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid #30363d;
+}
+
+.market-card {
+    background-color: #161b22;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #30363d;
+}
+
+.event-card {
+    background-color: #292313;
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid #66551c;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 
 # ============================================================
@@ -51,183 +71,177 @@ SUPERFICIE = pygame.Surface((ANCHO, ALTO))
 # ============================================================
 
 ACTIVOS = {
-
     "BIMBOA.MX": "Grupo Bimbo",
-
     "WALMEX.MX": "Walmart México",
-
     "FEMSAUBD.MX": "FEMSA",
-
     "GMEXICOB.MX": "Grupo México",
-
     "BTC-USD": "Bitcoin"
 }
 
 
 # ============================================================
-# FUNCIONES YFINANCE
+# DESCARGAR DATOS HISTÓRICOS
 # ============================================================
 
-@st.cache_data(ttl=300)
-def obtener_datos(ticker):
+@st.cache_data(ttl=3600)
+def descargar_datos(ticker, periodo):
 
-    try:
+    datos = yf.download(
+        ticker,
+        period=periodo,
+        interval="1d",
+        auto_adjust=True,
+        progress=False
+    )
 
-        datos = yf.download(
-            ticker,
-            period="3mo",
-            interval="1d",
-            auto_adjust=True,
-            progress=False
-        )
-
-        if datos.empty:
-            return None
-
-        # Manejar MultiIndex de yfinance
-        if isinstance(datos.columns, pd.MultiIndex):
-
-            precios = datos["Close"]
-
-            if isinstance(precios, pd.DataFrame):
-                precios = precios.iloc[:, 0]
-
-        else:
-
-            precios = datos["Close"]
-
-        precios = precios.dropna()
-
-        return precios
-
-    except Exception:
-
+    if datos.empty:
         return None
 
+    # Resolver posibles MultiIndex de yfinance
+    if isinstance(datos.columns, pd.MultiIndex):
+
+        if "Close" in datos.columns.get_level_values(0):
+            cierre = datos["Close"]
+
+            if isinstance(cierre, pd.DataFrame):
+                cierre = cierre.iloc[:, 0]
+
+        else:
+            cierre = datos.iloc[:, 0]
+
+    else:
+
+        cierre = datos["Close"]
+
+    cierre = pd.Series(cierre).dropna()
+
+    return cierre
+
 
 # ============================================================
-# INICIAR JUEGO
+# CALCULAR PARÁMETROS HISTÓRICOS
 # ============================================================
 
-def iniciar_juego():
+@st.cache_data(ttl=3600)
+def parametros_historicos(ticker, periodo):
 
-    st.session_state.jugando = True
+    precios = descargar_datos(ticker, periodo)
+
+    if precios is None or len(precios) < 30:
+        return None
+
+    # Rendimientos logarítmicos
+    rendimientos = np.log(
+        precios / precios.shift(1)
+    ).dropna()
+
+    # Media diaria
+    mu_diaria = rendimientos.mean()
+
+    # Volatilidad diaria
+    sigma_diaria = rendimientos.std()
+
+    # Parámetros anualizados
+    mu_anual = mu_diaria * 252
+
+    sigma_anual = sigma_diaria * np.sqrt(252)
+
+    precio_actual = float(precios.iloc[-1])
+
+    return {
+        "precio": precio_actual,
+        "mu_diaria": float(mu_diaria),
+        "sigma_diaria": float(sigma_diaria),
+        "mu_anual": float(mu_anual),
+        "sigma_anual": float(sigma_anual),
+        "historial": precios,
+        "rendimientos": rendimientos
+    }
+
+
+# ============================================================
+# SESIÓN
+# ============================================================
+
+if "iniciado" not in st.session_state:
+
+    st.session_state.iniciado = False
+
+if "ronda" not in st.session_state:
 
     st.session_state.ronda = 1
 
-    st.session_state.max_rondas = 20
+if "efectivo" not in st.session_state:
 
     st.session_state.efectivo = 100000.0
 
-    st.session_state.capital_inicial = 100000.0
+if "cartera" not in st.session_state:
 
     st.session_state.cartera = {
         ticker: 0
         for ticker in ACTIVOS
     }
 
+if "precios" not in st.session_state:
+
     st.session_state.precios = {}
 
-    st.session_state.historial = []
+if "historial_patrimonio" not in st.session_state:
 
-    st.session_state.decision = "Esperando decisión..."
-
-    st.session_state.evento = generar_evento()
-
-    # Obtener precios reales
-    for ticker in ACTIVOS:
-
-        datos = obtener_datos(ticker)
-
-        if datos is not None and len(datos) > 0:
-
-            st.session_state.precios[ticker] = float(
-                datos.iloc[-1]
-            )
-
-        else:
-
-            # Precio alternativo
-            st.session_state.precios[ticker] = 100.0
-
-
-# ============================================================
-# EVENTOS FINANCIEROS
-# ============================================================
-
-def generar_evento():
-
-    eventos = [
-
-        (
-            "BANXICO REDUCE LA TASA",
-            "Menores tasas favorecen el apetito por riesgo.",
-            1.015
-        ),
-
-        (
-            "BANXICO AUMENTA LA TASA",
-            "Las tasas elevadas presionan a los activos de riesgo.",
-            0.985
-        ),
-
-        (
-            "INFLACIÓN AL ALZA",
-            "La inflación genera incertidumbre en los mercados.",
-            0.975
-        ),
-
-        (
-            "CRECIMIENTO ECONÓMICO",
-            "Los indicadores muestran una economía más fuerte.",
-            1.025
-        ),
-
-        (
-            "CRISIS FINANCIERA",
-            "Los mercados internacionales presentan caídas.",
-            0.940
-        ),
-
-        (
-            "RALLY BURSÁTIL",
-            "Los inversionistas aumentan su exposición al riesgo.",
-            1.040
-        ),
-
-        (
-            "ESTABILIDAD",
-            "Los mercados presentan movimientos moderados.",
-            1.000
-        )
+    st.session_state.historial_patrimonio = [
+        100000.0
     ]
 
-    nombre, descripcion, factor = random.choice(eventos)
+if "eventos" not in st.session_state:
 
-    return {
-        "nombre": nombre,
-        "descripcion": descripcion,
-        "factor": factor
-    }
+    st.session_state.eventos = []
+
+if "evento_actual" not in st.session_state:
+
+    st.session_state.evento_actual = (
+        "El mercado abre con normalidad."
+    )
+
+if "mensaje" not in st.session_state:
+
+    st.session_state.mensaje = ""
 
 
 # ============================================================
-# VALOR DEL PORTAFOLIO
+# FUNCIONES DEL JUEGO
 # ============================================================
 
-def calcular_portafolio():
+def valor_cartera():
 
-    valor = st.session_state.efectivo
+    total = 0
 
     for ticker in ACTIVOS:
 
-        unidades = st.session_state.cartera[ticker]
+        cantidad = st.session_state.cartera[ticker]
 
-        precio = st.session_state.precios[ticker]
+        precio = st.session_state.precios.get(
+            ticker,
+            0
+        )
 
-        valor += unidades * precio
+        total += cantidad * precio
 
-    return valor
+    return total
+
+
+def patrimonio():
+
+    return (
+        st.session_state.efectivo
+        + valor_cartera()
+    )
+
+
+def rendimiento():
+
+    return (
+        patrimonio() / 100000 - 1
+    ) * 100
 
 
 # ============================================================
@@ -242,18 +256,18 @@ def comprar(ticker, cantidad):
 
     if costo <= st.session_state.efectivo:
 
-        st.session_state.efectivo -= costo
-
         st.session_state.cartera[ticker] += cantidad
 
-        st.session_state.decision = (
-            f"Compraste {cantidad} unidades de "
+        st.session_state.efectivo -= costo
+
+        st.session_state.mensaje = (
+            f"Compraste {cantidad} unidad(es) de "
             f"{ACTIVOS[ticker]}."
         )
 
     else:
 
-        st.session_state.decision = (
+        st.session_state.mensaje = (
             "No tienes suficiente efectivo."
         )
 
@@ -264,84 +278,73 @@ def comprar(ticker, cantidad):
 
 def vender(ticker, cantidad):
 
-    disponibles = st.session_state.cartera[ticker]
-
-    if cantidad <= disponibles:
+    if (
+        cantidad
+        <= st.session_state.cartera[ticker]
+    ):
 
         precio = st.session_state.precios[ticker]
 
         ingreso = precio * cantidad
 
-        st.session_state.efectivo += ingreso
-
         st.session_state.cartera[ticker] -= cantidad
 
-        st.session_state.decision = (
-            f"Vendiste {cantidad} unidades de "
+        st.session_state.efectivo += ingreso
+
+        st.session_state.mensaje = (
+            f"Vendiste {cantidad} unidad(es) de "
             f"{ACTIVOS[ticker]}."
         )
 
     else:
 
-        st.session_state.decision = (
+        st.session_state.mensaje = (
             "No tienes suficientes unidades."
         )
 
 
 # ============================================================
-# ACTUALIZAR PRECIOS
+# EVENTOS ECONÓMICOS
 # ============================================================
 
-def actualizar_precios():
+EVENTOS = [
 
-    factor_evento = st.session_state.evento["factor"]
+    (
+        "Inflación aumenta",
+        "La inflación supera las expectativas.",
+        -0.015
+    ),
 
-    for ticker in ACTIVOS:
+    (
+        "Recorte de tasas",
+        "El banco central reduce las tasas.",
+        0.012
+    ),
 
-        precio_actual = st.session_state.precios[ticker]
+    (
+        "Crisis internacional",
+        "Aumenta la incertidumbre financiera.",
+        -0.025
+    ),
 
-        # Parámetros de volatilidad
-        if ticker == "BTC-USD":
+    (
+        "Datos económicos positivos",
+        "La economía muestra fortaleza.",
+        0.018
+    ),
 
-            sigma = 0.045
+    (
+        "Mercados estables",
+        "Los mercados operan con estabilidad.",
+        0.002
+    ),
 
-        elif ticker == "GMEXICOB.MX":
-
-            sigma = 0.025
-
-        elif ticker == "WALMEX.MX":
-
-            sigma = 0.018
-
-        elif ticker == "BIMBOA.MX":
-
-            sigma = 0.015
-
-        else:
-
-            sigma = 0.012
-
-        # Movimiento Geométrico Browniano
-
-        mu = 0.0003
-
-        Z = np.random.normal()
-
-        retorno = (
-            mu
-            - 0.5 * sigma**2
-            + sigma * Z
-        )
-
-        nuevo_precio = (
-            precio_actual
-            * np.exp(retorno)
-        )
-
-        # Impacto del evento
-        nuevo_precio *= factor_evento
-
-        st.session_state.precios[ticker] = nuevo_precio
+    (
+        "Auge de activos de riesgo",
+        "Aumenta la demanda de activos de riesgo.",
+        0.020
+    )
+]
 
 
 # ============================================================
@@ -350,458 +353,500 @@ def actualizar_precios():
 
 def siguiente_ronda():
 
-    valor = calcular_portafolio()
+    if st.session_state.ronda >= 20:
 
-    st.session_state.historial.append({
+        st.session_state.mensaje = (
+            "La partida ha terminado."
+        )
 
-        "Ronda": st.session_state.ronda,
+        return
 
-        "Patrimonio": valor
+    evento = random.choice(EVENTOS)
 
-    })
+    nombre_evento = evento[0]
 
-    # Cambiar precios
-    actualizar_precios()
+    descripcion = evento[1]
+
+    factor = evento[2]
+
+    st.session_state.evento_actual = (
+        f"{nombre_evento}: {descripcion}"
+    )
+
+    # --------------------------------------------------------
+    # SIMULACIÓN CON SIGMA HISTÓRICA
+    # --------------------------------------------------------
+
+    for ticker in ACTIVOS:
+
+        parametros = parametros_historicos(
+            ticker,
+            periodo_hist
+        )
+
+        if parametros is None:
+            continue
+
+        mu = parametros["mu_diaria"]
+
+        sigma = parametros["sigma_diaria"]
+
+        Z = np.random.normal(0, 1)
+
+        # MGB
+        rendimiento_simulado = (
+            mu
+            - 0.5 * sigma**2
+            + sigma * Z
+            + factor
+        )
+
+        precio_actual = (
+            st.session_state.precios[ticker]
+        )
+
+        nuevo_precio = precio_actual * math.exp(
+            rendimiento_simulado
+        )
+
+        st.session_state.precios[ticker] = max(
+            nuevo_precio,
+            0.01
+        )
 
     st.session_state.ronda += 1
 
-    if st.session_state.ronda > st.session_state.max_rondas:
+    st.session_state.historial_patrimonio.append(
+        patrimonio()
+    )
 
-        st.session_state.jugando = False
+    st.session_state.eventos.append(
+        {
+            "Ronda": st.session_state.ronda,
+            "Evento": nombre_evento,
+            "Patrimonio": patrimonio()
+        }
+    )
 
-    else:
-
-        st.session_state.evento = generar_evento()
-
-        st.session_state.decision = (
-            "Esperando decisión..."
-        )
+    st.session_state.mensaje = (
+        f"Comenzó la ronda {st.session_state.ronda}."
+    )
 
 
 # ============================================================
-# TÍTULO
+# INICIO
 # ============================================================
 
 st.title("FINANCIAL TRADER")
 
-st.write(
-    "Videojuego educativo de inversión y mercados financieros"
+st.subheader(
+    "Simulador educativo de mercados financieros"
 )
 
 
 # ============================================================
-# PANTALLA INICIAL
+# CONFIGURACIÓN
 # ============================================================
 
-if "jugando" not in st.session_state:
-
-    st.subheader("¿Puedes vencer al mercado?")
+if not st.session_state.iniciado:
 
     st.write(
         """
-        Comienzas con **$100,000 MXN**.
+        Bienvenido al mercado.
 
-        Durante 20 rondas tendrás que tomar decisiones
-        de inversión utilizando información del mercado.
+        Comenzarás con **$100,000 MXN** y tendrás que
+        tomar decisiones de inversión durante 20 rondas.
 
-        Los precios iniciales se obtienen mediante
-        **Yahoo Finance**.
+        Los parámetros de riesgo de cada activo se calculan
+        utilizando sus rendimientos históricos reales.
         """
     )
 
-    st.info(
-        "Objetivo: terminar las 20 rondas con el mayor "
-        "patrimonio posible."
+    periodo_hist = st.selectbox(
+        "Periodo histórico para calcular la volatilidad",
+        [
+            "6mo",
+            "1y",
+            "2y",
+            "5y"
+        ],
+        index=2
     )
 
     if st.button(
         "INICIAR PARTIDA",
+        type="primary",
         use_container_width=True
     ):
 
-        iniciar_juego()
+        with st.spinner(
+            "Descargando datos históricos..."
+        ):
 
-        st.rerun()
+            for ticker in ACTIVOS:
+
+                parametros = parametros_historicos(
+                    ticker,
+                    periodo_hist
+                )
+
+                if parametros is not None:
+
+                    st.session_state.precios[ticker] = (
+                        parametros["precio"]
+                    )
+
+        if len(st.session_state.precios) == len(ACTIVOS):
+
+            st.session_state.iniciado = True
+
+            st.rerun()
+
+        else:
+
+            st.error(
+                "No fue posible obtener todos los precios."
+            )
 
     st.stop()
 
 
 # ============================================================
-# FINAL DEL JUEGO
+# VARIABLES DE JUEGO
 # ============================================================
 
-if not st.session_state.jugando:
+# Mantener disponible para siguiente_ronda
+if "periodo_hist" not in st.session_state:
 
-    valor_final = calcular_portafolio()
+    st.session_state.periodo_hist = "2y"
 
-    rendimiento = (
-        (valor_final - st.session_state.capital_inicial)
-        / st.session_state.capital_inicial
-        * 100
-    )
-
-    st.success("PARTIDA TERMINADA")
-
-    st.metric(
-        "Patrimonio final",
-        f"${valor_final:,.2f}"
-    )
-
-    st.metric(
-        "Rendimiento",
-        f"{rendimiento:.2f}%"
-    )
-
-    if rendimiento > 20:
-
-        st.balloons()
-
-        st.success(
-            "Excelente desempeño."
-        )
-
-    elif rendimiento > 0:
-
-        st.info(
-            "Terminaste con rendimiento positivo."
-        )
-
-    else:
-
-        st.warning(
-            "Tu patrimonio terminó por debajo "
-            "del capital inicial."
-        )
-
-    # --------------------------------------------------------
-    # GRÁFICA
-    # --------------------------------------------------------
-
-    if st.session_state.historial:
-
-        df = pd.DataFrame(
-            st.session_state.historial
-        )
-
-        st.subheader(
-            "Evolución del patrimonio"
-        )
-
-        st.line_chart(
-            df.set_index("Ronda")
-        )
-
-    if st.button(
-        "NUEVA PARTIDA",
-        use_container_width=True
-    ):
-
-        iniciar_juego()
-
-        st.rerun()
-
-    st.stop()
-
-
-# ============================================================
-# PANEL SUPERIOR
-# ============================================================
-
-valor_actual = calcular_portafolio()
-
-rendimiento = (
-    (valor_actual - st.session_state.capital_inicial)
-    / st.session_state.capital_inicial
-    * 100
-)
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-
-    st.metric(
-        "Patrimonio",
-        f"${valor_actual:,.0f}"
-    )
-
-with col2:
-
-    st.metric(
-        "Efectivo",
-        f"${st.session_state.efectivo:,.0f}"
-    )
-
-with col3:
-
-    st.metric(
-        "Rendimiento",
-        f"{rendimiento:.2f}%"
-    )
-
-
-# ============================================================
-# RONDA
-# ============================================================
-
-st.progress(
-    min(
-        st.session_state.ronda
-        / st.session_state.max_rondas,
-        1.0
-    )
-)
-
-st.write(
-    f"### Ronda {st.session_state.ronda} "
-    f"de {st.session_state.max_rondas}"
+periodo_hist = st.session_state.get(
+    "periodo_hist",
+    "2y"
 )
 
 
 # ============================================================
-# EVENTO ECONÓMICO
+# MÉTRICAS
 # ============================================================
 
-evento = st.session_state.evento
+col1, col2, col3, col4 = st.columns(4)
 
-st.subheader(
-    f"EVENTO: {evento['nombre']}"
+col1.metric(
+    "Ronda",
+    f"{st.session_state.ronda} / 20"
 )
 
-st.write(
-    evento["descripcion"]
+col2.metric(
+    "Efectivo",
+    f"${st.session_state.efectivo:,.2f}"
 )
+
+col3.metric(
+    "Portafolio",
+    f"${valor_cartera():,.2f}"
+)
+
+col4.metric(
+    "Rendimiento",
+    f"{rendimiento():+.2f}%"
+)
+
+
+st.divider()
+
+
+# ============================================================
+# EVENTO
+# ============================================================
+
+st.markdown(
+    f"""
+    <div class="event-card">
+    <b>EVENTO DE MERCADO</b><br><br>
+    {st.session_state.evento_actual}
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+
+st.divider()
 
 
 # ============================================================
 # MERCADO
 # ============================================================
 
-st.subheader("Mercado")
-
-datos = []
-
-for ticker in ACTIVOS:
-
-    datos.append({
-
-        "Ticker": ticker,
-
-        "Activo": ACTIVOS[ticker],
-
-        "Precio": st.session_state.precios[ticker],
-
-        "Posición": st.session_state.cartera[ticker]
-
-    })
-
-df = pd.DataFrame(datos)
-
-st.dataframe(
-    df,
-    hide_index=True,
-    use_container_width=True,
-    column_config={
-        "Precio": st.column_config.NumberColumn(
-            format="$%.2f"
-        )
-    }
-)
+st.header("Mercado")
 
 
-# ============================================================
-# DECISIÓN
-# ============================================================
+for ticker, nombre in ACTIVOS.items():
 
-st.subheader("Toma una decisión")
+    parametros = parametros_historicos(
+        ticker,
+        periodo_hist
+    )
 
-ticker = st.selectbox(
-    "Selecciona un activo",
-    list(ACTIVOS.keys()),
-    format_func=lambda x:
-        f"{x} — {ACTIVOS[x]}"
-)
-
-precio = st.session_state.precios[ticker]
-
-st.write(
-    f"**Precio:** ${precio:,.2f}"
-)
-
-cantidad = st.number_input(
-    "Cantidad",
-    min_value=1,
-    value=1,
-    step=1
-)
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-
-    if st.button(
-        "COMPRAR",
-        use_container_width=True
-    ):
-
-        comprar(
-            ticker,
-            cantidad
-        )
-
-        st.rerun()
-
-
-with col2:
-
-    if st.button(
-        "VENDER",
-        use_container_width=True
-    ):
-
-        vender(
-            ticker,
-            cantidad
-        )
-
-        st.rerun()
-
-
-with col3:
-
-    if st.button(
-        "MANTENER",
-        use_container_width=True
-    ):
-
-        st.session_state.decision = (
-            f"Mantienes tu posición en "
-            f"{ACTIVOS[ticker]}."
-        )
-
-
-# ============================================================
-# DECISIÓN
-# ============================================================
-
-st.info(
-    st.session_state.decision
-)
-
-
-# ============================================================
-# PORTAFOLIO
-# ============================================================
-
-st.subheader("Mi portafolio")
-
-datos_portafolio = []
-
-for ticker in ACTIVOS:
-
-    unidades = st.session_state.cartera[ticker]
+    if parametros is None:
+        continue
 
     precio = st.session_state.precios[ticker]
 
-    valor = unidades * precio
+    sigma_d = parametros["sigma_diaria"]
 
-    datos_portafolio.append({
+    sigma_a = parametros["sigma_anual"]
 
-        "Activo": ACTIVOS[ticker],
+    mu_d = parametros["mu_diaria"]
 
-        "Ticker": ticker,
+    cantidad = st.session_state.cartera[ticker]
 
-        "Unidades": unidades,
+    col1, col2, col3, col4, col5 = st.columns(
+        [2.2, 1.3, 1.3, 1.5, 2]
+    )
 
-        "Precio": precio,
+    with col1:
 
-        "Valor": valor
+        st.markdown(
+            f"**{nombre}**  \n"
+            f"`{ticker}`"
+        )
 
-    })
+    with col2:
 
-df_portafolio = pd.DataFrame(
-    datos_portafolio
+        st.write(
+            f"**${precio:,.2f}**"
+        )
+
+    with col3:
+
+        st.write(
+            f"σ diaria  \n"
+            f"**{sigma_d*100:.2f}%**"
+        )
+
+    with col4:
+
+        st.write(
+            f"σ anual  \n"
+            f"**{sigma_a*100:.2f}%**"
+        )
+
+    with col5:
+
+        st.write(
+            f"Posición: **{cantidad}**"
+        )
+
+
+        c1, c2 = st.columns(2)
+
+        with c1:
+
+            if st.button(
+                "COMPRAR",
+                key=f"buy_{ticker}",
+                use_container_width=True
+            ):
+
+                comprar(ticker, 1)
+
+                st.rerun()
+
+        with c2:
+
+            if st.button(
+                "VENDER",
+                key=f"sell_{ticker}",
+                use_container_width=True
+            ):
+
+                vender(ticker, 1)
+
+                st.rerun()
+
+
+st.divider()
+
+
+# ============================================================
+# INFORMACIÓN DE RIESGO
+# ============================================================
+
+st.header("Riesgo histórico")
+
+st.write(
+    """
+    La volatilidad σ se obtiene a partir de los
+    **rendimientos logarítmicos históricos**:
+    """
 )
 
-st.dataframe(
-    df_portafolio,
-    hide_index=True,
-    use_container_width=True,
-    column_config={
+st.latex(
+    r"""
+    r_t=\ln\left(\frac{S_t}{S_{t-1}}\right)
+    """
+)
 
-        "Precio":
-            st.column_config.NumberColumn(
-                format="$%.2f"
-            ),
+st.write(
+    "La volatilidad diaria se calcula como:"
+)
 
-        "Valor":
-            st.column_config.NumberColumn(
-                format="$%.2f"
-            )
-    }
+st.latex(
+    r"""
+    \sigma_d =
+    \operatorname{Std}(r_t)
+    """
+)
+
+st.write(
+    "Y la volatilidad anualizada:"
+)
+
+st.latex(
+    r"""
+    \sigma_a =
+    \sigma_d\sqrt{252}
+    """
 )
 
 
 # ============================================================
-# AVANZAR
+# GRÁFICA DEL PATRIMONIO
+# ============================================================
+
+st.header("Evolución del patrimonio")
+
+fig, ax = plt.subplots(
+    figsize=(10, 4)
+)
+
+ax.plot(
+    range(
+        len(
+            st.session_state.historial_patrimonio
+        )
+    ),
+    st.session_state.historial_patrimonio,
+    marker="o"
+)
+
+ax.axhline(
+    100000,
+    linestyle="--"
+)
+
+ax.set_xlabel("Ronda")
+
+ax.set_ylabel("Patrimonio ($)")
+
+ax.grid(True, alpha=0.2)
+
+st.pyplot(fig)
+
+
+# ============================================================
+# CARTERA
+# ============================================================
+
+st.header("Mi cartera")
+
+datos_cartera = []
+
+for ticker, nombre in ACTIVOS.items():
+
+    cantidad = st.session_state.cartera[ticker]
+
+    precio = st.session_state.precios[ticker]
+
+    valor = cantidad * precio
+
+    datos_cartera.append(
+        [
+            nombre,
+            ticker,
+            cantidad,
+            precio,
+            valor
+        ]
+    )
+
+df_cartera = pd.DataFrame(
+    datos_cartera,
+    columns=[
+        "Activo",
+        "Ticker",
+        "Unidades",
+        "Precio",
+        "Valor"
+    ]
+)
+
+st.dataframe(
+    df_cartera,
+    use_container_width=True,
+    hide_index=True
+)
+
+
+# ============================================================
+# MENSAJE
+# ============================================================
+
+if st.session_state.mensaje:
+
+    st.info(
+        st.session_state.mensaje
+    )
+
+
+# ============================================================
+# SIGUIENTE RONDA
 # ============================================================
 
 st.divider()
 
-if st.button(
-    "AVANZAR A LA SIGUIENTE RONDA",
-    use_container_width=True
-):
+if st.session_state.ronda < 20:
 
-    siguiente_ronda()
+    if st.button(
+        "SIGUIENTE RONDA",
+        type="primary",
+        use_container_width=True
+    ):
 
-    st.rerun()
+        siguiente_ronda()
+
+        st.rerun()
+
+else:
+
+    st.success(
+        f"""
+        PARTIDA TERMINADA
+
+        Patrimonio final:
+        **${patrimonio():,.2f}**
+
+        Rendimiento:
+        **{rendimiento():+.2f}%**
+        """
+    )
 
 
 # ============================================================
-# INFORMACIÓN DIDÁCTICA
+# DATOS DE LOS EVENTOS
 # ============================================================
 
-with st.expander(
-    "¿Qué modelo financiero utiliza el juego?"
-):
+if st.session_state.eventos:
 
-    st.write(
-        """
-        Los precios se simulan utilizando el
-        Movimiento Geométrico Browniano.
-        """
+    st.header("Historial de eventos")
+
+    df_eventos = pd.DataFrame(
+        st.session_state.eventos
     )
 
-    st.latex(
-        r"""
-        S_{t+1}=S_t
-        \exp\left[
-        \left(\mu-\frac{1}{2}\sigma^2\right)
-        +\sigma Z_t
-        \right]
-        """
-    )
-
-    st.write(
-        """
-        donde:
-
-        μ = rendimiento esperado
-
-        σ = volatilidad
-
-        Z = variable aleatoria normal estándar
-        """
-    )
-
-    st.latex(
-        r"""
-        R=\frac{V_f-V_0}{V_0}\times100
-        """
-    )
-
-    st.write(
-        "El objetivo es maximizar el rendimiento "
-        "sin asumir que un mayor riesgo siempre "
-        "produce un mayor rendimiento."
+    st.dataframe(
+        df_eventos,
+        use_container_width=True,
+        hide_index=True
     )
