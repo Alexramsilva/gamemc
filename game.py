@@ -24,8 +24,9 @@ st.set_page_config(
     page_icon="📈",
     layout="wide"
 )
-st.image("UNRC.png", caption="Universidad Nacional Rosario Castellanos", width=300)
+
 st.title("LCFI-UNRC")
+st.image("UNRC.png", caption="Universidad Nacional Rosario Castellanos", width=300)
 
 # ============================================================
 # ESTILO
