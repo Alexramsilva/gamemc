@@ -1,7 +1,7 @@
-streamlit
-pygame
+streamlit==1.63.0
+pygame==2.6.1
 yfinance
-pandas
 numpy
+pandas
 matplotlib
 
