@@ -26,7 +26,6 @@ st.set_page_config(
 )
 
 
-st.image("UNRC.png", caption="Universidad Nacional Rosario Castellanos", width=300)
 
 # ============================================================
 # ESTILO
@@ -439,6 +438,7 @@ def siguiente_ronda():
 # ============================================================
 # INICIO
 # ============================================================
+st.image("UNRC.png", caption="Universidad Nacional Rosario Castellanos", width=300)
 
 st.title("FINANCIAL TRADER")
 
