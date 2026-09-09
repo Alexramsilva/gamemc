@@ -25,7 +25,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("LCFI-UNRC")
+
 st.image("UNRC.png", caption="Universidad Nacional Rosario Castellanos", width=300)
 
 # ============================================================
