@@ -78,7 +78,7 @@ ACTIVOS = {
     "WALMEX.MX": "Walmart México",
     "FEMSAUBD.MX": "FEMSA",
     "GMEXICOB.MX": "Grupo México",
-    "BTC-USD": "Bitcoin"
+    "GENTERA.MX": "Gentera"
 }
 
 
@@ -176,7 +176,7 @@ if "ronda" not in st.session_state:
 
 if "efectivo" not in st.session_state:
 
-    st.session_state.efectivo = 100000.0
+    st.session_state.efectivo = 10000.0
 
 if "cartera" not in st.session_state:
 
@@ -243,7 +243,7 @@ def patrimonio():
 def rendimiento():
 
     return (
-        patrimonio() / 100000 - 1
+        patrimonio() / 10000 - 1
     ) * 100
 
 
@@ -443,7 +443,7 @@ def siguiente_ronda():
 st.title("FINANCIAL TRADER")
 
 st.subheader(
-    "Simulador educativo de mercados financieros"
+    "Simulación Bursátil y Avanzada en Finanzas"
 )
 
 
@@ -457,7 +457,7 @@ if not st.session_state.iniciado:
         """
         Bienvenido al mercado.
 
-        Comenzarás con **$100,000 MXN** y tendrás que
+        Comenzarás con **$10,000 MXN** y tendrás que
         tomar decisiones de inversión durante 20 rondas.
 
         Los parámetros de riesgo de cada activo se calculan
