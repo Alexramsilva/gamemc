@@ -73,7 +73,7 @@ st.markdown("""
 # ============================================================
 
 ACTIVOS = {
-    "BIMBOA.MX": "Grupo Bimbo",
+    "FMTY14.MX": "Fibra Monterrey",
     "WALMEX.MX": "Walmart México",
     "FEMSAUBD.MX": "FEMSA",
     "GMEXICOB.MX": "Grupo México",
