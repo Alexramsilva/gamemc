@@ -76,6 +76,7 @@ ACTIVOS = {
     "FMTY14.MX": "Fibra Monterrey",
     "WALMEX.MX": "Walmart México",
     "FEMSAUBD.MX": "FEMSA",
+    "KOFUBL.MX": "FEMSA Coca Cola",
     "GMEXICOB.MX": "Grupo México",
     "GENTERA.MX": "Gentera"
 }
