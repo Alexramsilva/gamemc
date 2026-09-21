@@ -314,37 +314,37 @@ EVENTOS = [
 
     (
         "Inflación aumenta",
-        "La inflación supera las expectativas.",
+        "La inflación supera las expectativas (impacto -0.015).",
         -0.015
     ),
 
     (
         "Recorte de tasas",
-        "El banco central reduce las tasas.",
+        "El banco central reduce las tasas  (impacto 0.012).",
         0.012
     ),
 
     (
         "Crisis internacional",
-        "Aumenta la incertidumbre financiera.",
+        "Aumenta la incertidumbre financiera (impacto -0.025).",
         -0.025
     ),
 
     (
         "Datos económicos positivos",
-        "La economía muestra fortaleza.",
+        "La economía muestra fortaleza (impacto 0.018).",
         0.018
     ),
 
     (
         "Mercados estables",
-        "Los mercados operan con estabilidad.",
+        "Los mercados operan con estabilidad (impacto 0.002).",
         0.002
     ),
 
     (
         "Auge de activos de riesgo",
-        "Aumenta la demanda de activos de riesgo.",
+        "Aumenta la demanda de activos de riesgo (impacto 0.020).",
         0.020
     )
 ]
