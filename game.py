@@ -78,7 +78,8 @@ ACTIVOS = {
     "FEMSAUBD.MX": "FEMSA",
     "KOFUBL.MX": "FEMSA Coca Cola",
     "GMEXICOB.MX": "Grupo México",
-    "GENTERA.MX": "Gentera"
+    "GENTERA.MX": "Gentera",
+    "AMXB.MX": "America Móvil"
 }
 
 
@@ -446,7 +447,7 @@ st.image("UNRC.png", caption="Universidad Nacional Rosario Castellanos", width=3
 st.title("Reto Chayito: FINANCIAL TRADER")
 
 st.subheader(
-    "Simulación Bursátil y Avanzada en Finanzas"
+    "Licenciatura en Contaduría y Finanzas"
 )
 
 
