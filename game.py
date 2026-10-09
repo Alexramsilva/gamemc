@@ -443,7 +443,7 @@ st.title("")
 
 st.image("UNRC.png", caption="Universidad Nacional Rosario Castellanos", width=300)
 
-st.title("FINANCIAL TRADER")
+st.title("Reto Chayito: FINANCIAL TRADER")
 
 st.subheader(
     "Simulación Bursátil y Avanzada en Finanzas"
