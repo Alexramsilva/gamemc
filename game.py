@@ -606,6 +606,7 @@ for ticker, nombre in ACTIVOS.items():
     sigma_a = parametros["sigma_anual"]
 
     mu_d = parametros["mu_diaria"]
+    mu_a = parametros["mu_anual"]
 
     cantidad = st.session_state.cartera[ticker]
 
@@ -629,8 +630,8 @@ for ticker, nombre in ACTIVOS.items():
     with col3:
 
         st.write(
-            f"σ diaria  \n"
-            f"**{sigma_d*100:.2f}%**"
+            f"μ anual  \n"
+            f"**{mu_a*100:.2f}%**"
         )
 
     with col4:
