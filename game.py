@@ -58,7 +58,7 @@ st.markdown("""
 }
 
 .event-card {
-    background-color: #292313;
+    background-color: #244A78;
     padding: 15px;
     border-radius: 10px;
     border: 1px solid #66551c;
