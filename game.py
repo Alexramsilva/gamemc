@@ -80,7 +80,9 @@ ACTIVOS = {
     "KOFUBL.MX": "FEMSA Coca Cola",
     "GMEXICOB.MX": "Grupo México",
     "GENTERA.MX": "Gentera",
-    "AMXB.MX": "America Móvil"
+    "AMXB.MX": "America Móvil",
+    "ALSEA.MX": "ALSEA",
+    "BIMBOA.MX": "Bimbo",
 }
 
 
