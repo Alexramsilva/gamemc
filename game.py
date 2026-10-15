@@ -443,7 +443,7 @@ def siguiente_ronda():
 # ============================================================
 st.title("")
 
-st.image("UNRC.png", caption="Universidad Nacional Rosario Castellanos", width=300)
+st.image("UNRC.svg", caption="Universidad Nacional Rosario Castellanos", width=300)
 
 st.title("Reto Chayito: Desafío del Trader Financiero")
 
